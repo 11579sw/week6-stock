@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock Trend Viewer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">MARKET DESK</p>
+      <h1>股票趋势查询</h1>
+    </div>
+    <a class="link-button" href="{{ url_for('logout') }}">退出登录</a>
+  </header>
+
+  <main class="shell">
+    <section class="query-panel">
+      <form method="post" class="query-form">
+        <label>股票代码
+          <input name="ticker" value="{{ ticker }}" placeholder="AAPL 或 0700.HK" required>
+        </label>
+        <label>自然日
+          <input name="days" type="number" min="1" value="{{ days }}" required>
+        </label>
+        <button type="submit">查询行情</button>
+      </form>
+      <p class="hint">支持美股、港股、沪深股票，例如 `AAPL`、`0700.HK`、`HKG: 1810`。</p>
+    </section>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+    {% if result %}
+      <section class="headline-row">
+        <div>
+          <p class="eyebrow">{{ result.ticker_symbol }} · {{ result.latest_date }}</p>
+          <h2>{{ result.overview.name }}</h2>
+        </div>
+        <a class="download-button" href="{{ url_for('download', ticker=result.ticker_symbol, days=result.period_days) }}">下载 CSV</a>
+      </section>
+
+      <section class="metrics">
+        <div>
+          <span>最近价格</span>
+          <strong id="live-price">{{ result.unit }}{{ "%.2f"|format(result.latest_price) }}</strong>
+          <small id="live-status" class="live-status" role="status">正在连接实时行情…</small>
+        </div>
+        <div><span>区间最高</span><strong>{{ result.unit }}{{ "%.2f"|format(result.max_price) }}</strong></div>
+        <div><span>区间最低</span><strong>{{ result.unit }}{{ "%.2f"|format(result.min_price) }}</strong></div>
+        <div><span>查询范围</span><strong>{{ result.period_days }} 天</strong></div>
+      </section>
+
+      <section class="content-grid">
+        <article class="chart-card">
+          <img src="data:image/png;base64,{{ result.chart }}" alt="{{ result.ticker_symbol }} 收盘价趋势图">
+        </article>
+        <aside class="overview-card">
+          <h3>公司概览</h3>
+          <dl>
+            <dt>市盈率 PE</dt><dd>{{ result.overview.pe }}</dd>
+            <dt>市净率 PB</dt><dd>{{ result.overview.pb }}</dd>
+            <dt>股息率</dt><dd>{{ result.overview.dividend }}</dd>
+            <dt>市值</dt><dd>{{ result.overview.market_cap }}</dd>
+            <dt>总收入</dt><dd>{{ result.overview.revenue }}</dd>
+            <dt>毛利率</dt><dd>{{ result.overview.gross_margin }}</dd>
+            <dt>净利率</dt><dd>{{ result.overview.profit_margin }}</dd>
+            <dt>ROE</dt><dd>{{ result.overview.roe }}</dd>
+            <dt>行业</dt><dd>{{ result.overview.industry }}</dd>
+            <dt>板块</dt><dd>{{ result.overview.sector }}</dd>
+            <dt>国家/地区</dt><dd>{{ result.overview.country }}</dd>
+          </dl>
+          <h3>公司简介</h3>
+          <p class="summary">{{ result.overview.summary }}</p>
+        </aside>
+      </section>
+    {% else %}
+      <section class="empty-state">
+        <p class="eyebrow">READY FOR A QUERY</p>
+        <h2>输入股票代码，开始查看行情。</h2>
+        <p>查询结果会显示收盘价趋势、关键指标和可下载的历史数据。</p>
+      </section>
+    {% endif %}
+  </main>
+  {% if result %}
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+      (() => {
+        const ticker = {{ result.ticker_symbol|tojson }};
+        const unit = {{ result.unit|tojson }};
+        const priceElement = document.getElementById("live-price");
+        const statusElement = document.getElementById("live-status");
+        const socket = io({ transports: ["websocket"] });
+
+        socket.on("connect", () => {
+          statusElement.textContent = "实时行情已连接";
+          socket.emit("subscribe_stock", { ticker }, (response) => {
+            if (!response || !response.ok) {
+              statusElement.textContent = response?.error || "实时订阅失败";
+            }
+          });
+        });
+
+        socket.on("stock_price", (update) => {
+          if (update.ticker_symbol !== ticker) return;
+          priceElement.textContent = `${unit}${Number(update.price).toFixed(2)}`;
+          statusElement.textContent =
+            `实时更新 · ${new Date(update.updated_at).toLocaleTimeString()}`;
+        });
+
+        socket.on("stock_price_error", (update) => {
+          if (update.ticker === ticker) statusElement.textContent = update.message;
+        });
+
+        socket.on("disconnect", () => {
+          statusElement.textContent = "实时行情连接已断开";
+        });
+      })();
+    </script>
+  {% endif %}
+</body>
+</html>

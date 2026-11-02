@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock Trend Viewer | 登录</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <p class="eyebrow">STOCK TREND VIEWER</p>
+    <h1>登录查询台</h1>
+    <p class="muted">输入账号后查看股票价格趋势和公司资料。</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post" class="stack-form">
+      <label>用户名<input name="username" autocomplete="username" required autofocus></label>
+      <label>密码<input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit">登录</button>
+    </form>
+  </main>
+</body>
+</html>
